@@ -76,8 +76,6 @@ void read_mnist_train_lab() {
         throw std::runtime_error("invalid magic number for file: " + target_file);
     }
     int number_of_labels = 0;
-    int n_rows = 0;
-    int n_cols = 0;
     file.read((char*) &number_of_labels, sizeof(number_of_labels));
     number_of_labels = reverse_int(number_of_labels);
     mnist_train_Y.resize(number_of_labels);
@@ -108,7 +106,7 @@ int main() {
     };
     InitialitzationFunctions::setup(7);
     NeuralNetwork::NNConfig *config = new NeuralNetwork::NNConfig(28*28, 10, lays, a_f, InitialitzationFunctions::he_init, ErrorFunctions::mse);
-    OptimizerFunctions::LRDecay *dec = new OptimizerFunctions::LRDecay(0.000005);
+    // OptimizerFunctions::LRDecay *dec = new OptimizerFunctions::LRDecay(0.000005);
     // NeuralNetwork::BProp *bprop = new NeuralNetwork::BProp(1e-2, dec);
     NeuralNetwork::Adam *adam = new NeuralNetwork::Adam(0.002, 0.9, 0.999, 1e-8);
     NeuralNetwork::FFNeuralNetwork *net = new NeuralNetwork::FFNeuralNetwork(config, adam);
