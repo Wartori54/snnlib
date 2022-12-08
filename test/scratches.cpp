@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <iomanip>
+#include <ios>
 
 std::vector<std::vector<int>> possible_cases = {
     {0, 1, 2},
@@ -31,5 +33,11 @@ int main() {
     std::vector<int> c1 = {-1,  1,  0, 
                             0,  1,  1, 
                            -1,  1,  0};
+    std::ios_base::fmtflags f( std::cout.flags() );
     std::cout << possibleWins(c1, -1) << std::endl;
+    std::cout << 324.533333333 << std::endl;
+    
+    std::cout << std::fixed << std::setprecision(5) << 5234.3432423523 << std::endl;
+    std::cout.flags(f);
+    std::cout << 324.533333333 << std::endl;
 }

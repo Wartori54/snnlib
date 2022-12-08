@@ -4,6 +4,7 @@
 #include <string>
 #include <iostream>
 #include <chrono>
+#include <iomanip>
 
 #include <neuralnetwork.h>
 #include <functions.h>
@@ -100,12 +101,17 @@ void NeuralNetwork::FFNeuralNetwork::fit(std::vector<std::vector<double>>& input
     size_t total_splits = (total_samples/batch_s)+1;
     size_t lbatch_size = total_samples-batch_s*(total_splits-1); // last batch size
     std::vector<neuron_state> res(curr_conf->n_outputs, {0, 0});
-    double cost, batch_cost, highest_cost;
+    double cost, batch_cost, highest_cost, batch_prog;
     std::chrono::_V2::system_clock::time_point start, end;
     std::chrono::milliseconds duration;
+    int progress_bar_size = 100;
+    // set up before entering loop
+    std::ios_base::fmtflags f( std::cout.flags() );
+    std::cout << std::fixed << std::setprecision(2);
     for (size_t batch = 0; batch < batches; batch++) {
         batch_cost = 0;
         highest_cost = 0;
+        batch_prog = 0;
         start = std::chrono::high_resolution_clock::now();
         for (size_t batch_c = 0; batch_c < total_splits; batch_c++) {
             for (size_t i = 0; i < batch_s; i++) {
@@ -120,19 +126,33 @@ void NeuralNetwork::FFNeuralNetwork::fit(std::vector<std::vector<double>>& input
                     highest_cost = cost;
                 }
                 this->optimizer.get()->step(targets[batch_c*batch_s+i]);
+                batch_prog += 1.0 / (double) total_samples;
             }
             // after each sub batch update weights
             this->weights = this->s_weights;
             this->biases = this->s_biases;
-            std::cout << "-" << std::flush;
+            std::cout << "[";
+            for (int c = 0; c < progress_bar_size; c++) {
+                if (c < progress_bar_size*batch_prog)
+                    std::cout << "=";
+                else 
+                    std::cout << "-";
+            }
+            std::cout << "] " << batch_prog*100 << "%, " << (batch_c)*batch_s << "/" << total_samples << "\r";
+            std::cout.flush();
+            
         }
         end = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         // batch_cost /= total_samples;
-        std::cout << "Itr: " << iteration << ", " << duration.count() << "ms" << ", cost: " << batch_cost << ", highest: " << highest_cost << std::endl;
+        
+        std::cout << "\nItr: " << iteration << ", " << duration.count() << "ms" << ", cost: " << batch_cost << ", highest: " << highest_cost << std::endl;
         iteration++;
         
     }
+
+    // and unsetup to not accidentally mess with other stuff
+    std::cout.flags(f);
 }
 
 
