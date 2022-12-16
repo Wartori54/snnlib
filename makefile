@@ -3,7 +3,7 @@
 .PHONY: clean test all scratches
 
 CC = g++
-CFLAGS = -Wall -Wextra -Wpedantic -fPIC -g -O2
+CFLAGS = -Wall -Wextra -Wpedantic -fPIC -g
 
 SRC_DIR=./src
 INC_DIR=./include
