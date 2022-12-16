@@ -134,32 +134,7 @@ void run_test(std::pair<int, double>* out, int st, int end) {
     *out = {best_seed, lowest_cost};
 }
 
-int main() {
-    read_mnist_train();
-    read_mnist_train_lab();
-    
-    // std::vector<act_func> ptr = {ActivationFunctions::softmax};
-    // jacob_act_func* jptr = dynamic_cast<jacob_act_func*>(&ptr[0]);
-    // jacob_act_func* jaf = dynamic_cast<jacob_act_func*>(a_f[2]);
-    
-    // size_t range = 50;
-    // for (size_t x = 0; x < range; x++) {
-    //     for (size_t y = 0; y < range; y++) {
-    //         double p_x = (x-range/2.0)/range;
-    //         double p_y = (y-range/2.0)/range;
-    //         train_X.push_back({p_x, p_y});
-    //         train_Y.push_back({target_func(p_x, p_y)});
-    //     }
-    // }
-    // mnist testing
-
-    for (size_t i = 0; i < mnist_train_X.size()/1000; i++) {
-        smol_train_X.push_back(mnist_train_X[i]);
-        smol_train_Y.push_back(mnist_train_Y[i]);
-    }
-
-    int seeds_to_test = 10*5;
-    int threadc = 10;
+int get_good_seed(int seeds_to_test, int threadc) {
     std::vector<std::thread> threads;
     std::pair<int, double> *res_threads = new std::pair<int, double>[threadc];
     threadc = (seeds_to_test<threadc) ? seeds_to_test : threadc;
@@ -189,7 +164,36 @@ int main() {
     delete[] res_threads;
     if (best_seed == INFINITY) throw std::runtime_error("bad");
     std::cout << "Seed chosen: " << best_seed << std::endl;
-    InitialitzationFunctions::HeInit init_f(best_seed);
+    return best_seed;
+}
+
+int main() {
+    read_mnist_train();
+    read_mnist_train_lab();
+    
+    // std::vector<act_func> ptr = {ActivationFunctions::softmax};
+    // jacob_act_func* jptr = dynamic_cast<jacob_act_func*>(&ptr[0]);
+    // jacob_act_func* jaf = dynamic_cast<jacob_act_func*>(a_f[2]);
+    
+    // size_t range = 50;
+    // for (size_t x = 0; x < range; x++) {
+    //     for (size_t y = 0; y < range; y++) {
+    //         double p_x = (x-range/2.0)/range;
+    //         double p_y = (y-range/2.0)/range;
+    //         train_X.push_back({p_x, p_y});
+    //         train_Y.push_back({target_func(p_x, p_y)});
+    //     }
+    // }
+    // mnist testing
+
+    for (size_t i = 0; i < mnist_train_X.size()/1000; i++) {
+        smol_train_X.push_back(mnist_train_X[i]);
+        smol_train_Y.push_back(mnist_train_Y[i]);
+    }
+    // int best_seed = get_good_seed(10*5, 10);
+    // InitialitzationFunctions::HeInit init_f(best_seed);
+
+    InitialitzationFunctions::HeInit init_f(41);
     NeuralNetwork::NNConfig config(28*28, 10, lays, a_f, &init_f, ErrorFunctions::cross_entropy); // TODO add softmax error calc error
     NeuralNetwork::Adam adam(0.002, 0.9, 0.999, 1e-8);
     NeuralNetwork::FFNeuralNetwork net(&config, &adam);

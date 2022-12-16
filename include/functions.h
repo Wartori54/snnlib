@@ -145,10 +145,7 @@ namespace OptimizerFunctions {
     public:
         LearningRateOptimizerBase();
         ~LearningRateOptimizerBase();
-        virtual double step(double lr, unsigned long long itr) {
-            lr = itr; itr = lr; // trick compiler to remove unused parameter warnings
-            throw std::runtime_error("step: unimplemented");
-        };
+        virtual double step(double lr, unsigned long long itr) = 0;
     };
 
     /// @brief A basic time-based decay function.

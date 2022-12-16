@@ -35,10 +35,7 @@ namespace NeuralNetwork {
         void step(std::vector<double> &targets);
     private:
         void gradient_descent(std::vector<double> &targets);
-        virtual void shift_values(int wl) {
-            wl = wl;
-            throw std::runtime_error("shift_values: unimplemented");
-        };
+        virtual void shift_values(int wl) = 0;
     };
 
     /// @brief Standard Backpropagation.
