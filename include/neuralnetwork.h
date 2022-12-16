@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <memory>
+#include <optional>
 #include <functions.h>
 
 namespace NeuralNetwork {
@@ -11,7 +12,7 @@ namespace NeuralNetwork {
     /// **DO NO INSTANCIATE THIS**
     class GradientDescendOptim {
     protected:
-        std::unique_ptr<FFNeuralNetwork> net_owner;
+        FFNeuralNetwork* net_owner = nullptr;
         // notation: L -> the cost function
         //           a -> activation function
         //           z -> the neuron result before activation function
@@ -19,12 +20,13 @@ namespace NeuralNetwork {
         //           b -> a certain bias
         std::vector<double> dLofa;      //              dL/da -> derivative of L in respect to a
         std::vector<double> temp_dLofa; //              copy for gradient_descent
-        std::vector<double> daofz;      //              da/dz
+        std::vector<std::vector<double>> daofz; //       da/dz, 2d array for support for jacobian matrix
         // we skip dzofw and dzofb as they would be simple or constant values
         std::vector<std::vector<double>> dLofw; // dL/dw -> (dL/da)*(da/dz)*(dz/dw). 
         // dz/dw always turns out to be the activation of the previous neurons
         std::vector<double> dLofb; //              dL/dw -> (dL/da)*(da/dz)*(dz/db). dz/dw always turns out to be 1
     public:
+        ~GradientDescendOptim();
         /// @brief Must be called before using at all.
         /// @param net The network that this object is attached to.
         virtual void set_owner(FFNeuralNetwork *net);
@@ -92,9 +94,10 @@ namespace NeuralNetwork {
         std::vector<int> n_layers;
         int n_inputs, n_outputs;
         std::vector<int> h_layers;
-        std::vector<act_func> act_funcs;
+        std::vector<act_func*> act_funcs;
         error_func e_func;
-        void (*v_init)(weight_vec& weights, bias_vec& biases);
+        InitialitzationFunctions::InitFunc *v_init;
+        bool verbose = true;
         ///
         /// @brief Construct a new NNConfig, used to store neural network design.
         /// 
@@ -107,8 +110,8 @@ namespace NeuralNetwork {
         NNConfig(int n_inputs,
                  int n_outputs,
                  std::vector<int> h_layers,
-                 std::vector<act_func> act_funcs,
-                 void (*v_init)(weight_vec&, bias_vec&),
+                 std::vector<act_func*> act_funcs,
+                 InitialitzationFunctions::InitFunc *v_init,
                  error_func e_func); // here we can afford a copy of all vectors as they wont be too big
         ~NNConfig();
     };
@@ -117,8 +120,8 @@ namespace NeuralNetwork {
     class FFNeuralNetwork {
     private:
     public:
-        std::unique_ptr<NNConfig> config;
-        std::unique_ptr<GradientDescendOptim> optimizer;
+        GradientDescendOptim *optimizer;
+        NNConfig *config;
         weight_vec weights;
         bias_vec biases;
         weight_vec s_weights; // weight shifts
@@ -132,7 +135,7 @@ namespace NeuralNetwork {
         ~FFNeuralNetwork();
         /// @brief Obtains the config of the network.
         /// @return The assigned NNConfig instance.
-        NNConfig *get_config();
+        NNConfig* get_config();
         /// @brief Does a forward pass.
         /// @param inputs The inputs to predict on.
         /// @return The results at the output layer.
@@ -142,6 +145,7 @@ namespace NeuralNetwork {
         /// @param targets The target outputs of the dataset to train on.
         /// @param batch_s The mini batch size. The network will be updated every batch_s dataset samples .
         /// @param batches The total number of interations to the whole dataset.
-        void fit(std::vector<std::vector<double>>& inputs, std::vector<std::vector<double>>& targets, size_t batch_s, size_t batches);
+        /// @return The cost of the last batch
+        double fit(std::vector<std::vector<double>>& inputs, std::vector<std::vector<double>>& targets, size_t batch_s, size_t batches);
     };
 }

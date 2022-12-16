@@ -5,12 +5,23 @@
 #include <string>
 #include <fstream>
 #include <string>
+#include <thread>
 
 std::vector<std::vector<double>> train_X;
 std::vector<std::vector<double>> train_Y;
 
 std::vector<std::vector<double>> mnist_train_X;
 std::vector<std::vector<double>> mnist_train_Y;
+
+std::vector<std::vector<double>> smol_train_X;
+std::vector<std::vector<double>> smol_train_Y;
+
+std::vector lays = {20, 10};
+std::vector<act_func*> a_f = {
+    &ActivationFunctions::relu,
+    &ActivationFunctions::relu,
+    &ActivationFunctions::softmax
+};
 
 int reverse_int(int i) {
     unsigned char c1, c2, c3, c4;
@@ -95,21 +106,42 @@ double target_func(double x, double y) {
     // return x*x+y*y;
 }
 
+void run_test(std::pair<int, double>* out, int st, int end) {
+    InitialitzationFunctions::HeInit init_f(0);
+    NeuralNetwork::NNConfig config(28*28, 10, lays, a_f, &init_f, ErrorFunctions::cross_entropy); // TODO add softmax error calc error
+    config.verbose = false;
+    // net config can be recycled
+    double lowest_cost = INFINITY;
+    int seed = 0;
+    int best_seed = 0;
+
+    for (int i = st; i < end; i++) {
+        seed = i;
+        init_f.set_seed(seed);
+        // OptimizerFunctions::LRDecay *dec = new OptimizerFunctions::LRDecay(0.000005);
+        // NeuralNetwork::BProp *bprop = new NeuralNetwork::BProp(1e-2, dec);
+        // optimizer cann not
+        NeuralNetwork::Adam adam(0.002, 0.9, 0.999, 1e-8);
+        NeuralNetwork::FFNeuralNetwork net(&config, &adam);
+        
+        double cost = net.fit(mnist_train_X, mnist_train_Y, 32, 1);
+        std::cout << "^Seed: " << seed << std::endl;
+        if (cost < lowest_cost) {
+            lowest_cost = cost;
+            best_seed = seed;
+        }
+    }
+    *out = {best_seed, lowest_cost};
+}
+
 int main() {
     read_mnist_train();
     read_mnist_train_lab();
-    std::vector lays = {10, 5};
-    std::vector<act_func> a_f = {
-        ActivationFunctions::relu,
-        ActivationFunctions::relu,
-        ActivationFunctions::sigmoid
-    };
-    InitialitzationFunctions::setup(7);
-    NeuralNetwork::NNConfig *config = new NeuralNetwork::NNConfig(28*28, 10, lays, a_f, InitialitzationFunctions::he_init, ErrorFunctions::mse);
-    // OptimizerFunctions::LRDecay *dec = new OptimizerFunctions::LRDecay(0.000005);
-    // NeuralNetwork::BProp *bprop = new NeuralNetwork::BProp(1e-2, dec);
-    NeuralNetwork::Adam *adam = new NeuralNetwork::Adam(0.002, 0.9, 0.999, 1e-8);
-    NeuralNetwork::FFNeuralNetwork *net = new NeuralNetwork::FFNeuralNetwork(config, adam);
+    
+    // std::vector<act_func> ptr = {ActivationFunctions::softmax};
+    // jacob_act_func* jptr = dynamic_cast<jacob_act_func*>(&ptr[0]);
+    // jacob_act_func* jaf = dynamic_cast<jacob_act_func*>(a_f[2]);
+    
     // size_t range = 50;
     // for (size_t x = 0; x < range; x++) {
     //     for (size_t y = 0; y < range; y++) {
@@ -119,7 +151,48 @@ int main() {
     //         train_Y.push_back({target_func(p_x, p_y)});
     //     }
     // }
-    net->fit(mnist_train_X, mnist_train_Y, 32, 100);
+    // mnist testing
 
+    for (size_t i = 0; i < mnist_train_X.size()/1000; i++) {
+        smol_train_X.push_back(mnist_train_X[i]);
+        smol_train_Y.push_back(mnist_train_Y[i]);
+    }
+
+    int seeds_to_test = 10*5;
+    int threadc = 10;
+    std::vector<std::thread> threads;
+    std::pair<int, double> *res_threads = new std::pair<int, double>[threadc];
+    threadc = (seeds_to_test<threadc) ? seeds_to_test : threadc;
+    int step = seeds_to_test/threadc;
+    int st = 0, end = 0, curr = 0;
+    for (int i = 0; i < threadc; i++) {
+        curr = step;
+        if (i < step) {
+            curr++;
+        }
+        end += curr;
+        threads.push_back(std::thread(run_test, res_threads+i, st, end));
+        st += curr;
+    }
+    for (size_t i = 0; i < threads.size(); i++) {
+        threads[i].join();
+    }
+    
+    int best_seed = INFINITY;
+    double lowest_cost = INFINITY;
+    for (int i = 0; i < threadc; i++) {
+        if (res_threads[i].second < lowest_cost) {
+            lowest_cost = res_threads[i].second;
+            best_seed = res_threads[i].first;
+        }
+    }
+    delete[] res_threads;
+    if (best_seed == INFINITY) throw std::runtime_error("bad");
+    std::cout << "Seed chosen: " << best_seed << std::endl;
+    InitialitzationFunctions::HeInit init_f(best_seed);
+    NeuralNetwork::NNConfig config(28*28, 10, lays, a_f, &init_f, ErrorFunctions::cross_entropy); // TODO add softmax error calc error
+    NeuralNetwork::Adam adam(0.002, 0.9, 0.999, 1e-8);
+    NeuralNetwork::FFNeuralNetwork net(&config, &adam);
+    net.fit(mnist_train_X, mnist_train_Y, 32, 100);
 
 }

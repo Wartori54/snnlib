@@ -16,6 +16,19 @@ struct neuron_state {
 struct act_func { // both functions should read from neuron_state.pond_sum and assings the neuron_state.result.
     void (*func)(std::vector<neuron_state>& outs); // activation func, takes all results and gives outputs
     void (*dfunc)(std::vector<neuron_state>& pond_sums, std::vector<double>& outs); // derivative of the act func
+    act_func(void (*f)(std::vector<neuron_state>&), 
+             void (*df)(std::vector<neuron_state>& , std::vector<double>& ))
+             : func(f), dfunc(df) {};
+    virtual ~act_func() {};
+};
+
+void invalid_dfunc(std::vector<neuron_state>& pond_sums, std::vector<double>& outs);
+
+struct jacob_act_func : public act_func {
+    void (*djfunc)(std::vector<neuron_state>& pond_sums, std::vector<std::vector<double>>& outs);
+    jacob_act_func(void (*f)(std::vector<neuron_state>&), 
+                   void (*djf)(std::vector<neuron_state>&,  std::vector<std::vector<double>>& )) 
+                   : act_func(f, invalid_dfunc), djfunc(djf) {};
 };
 
 /// @brief An error calculation function, used to determitante the accuracy of the network on a given case, also used in gradient descent.
@@ -62,24 +75,43 @@ namespace ActivationFunctions {
     /// @brief Sigmoid activation function.
     extern act_func sigmoid;
 
+    void fsoftmax(std::vector<neuron_state>& outs);
+    void djsoftmax(std::vector<neuron_state>& pond_sums, std::vector<std::vector<double>>& outs);
+
+    extern jacob_act_func softmax;
+
 } // namespace ActivationFunctions
 
 /// @brief The collection of available weight and bias initialitzation algorithms.
 namespace InitialitzationFunctions {
-    extern std::random_device rd;
-    extern std::default_random_engine eng;
+    class InitFunc {
+        public:
+        virtual void do_init(weight_vec& weights, bias_vec& biases) = 0;
+    };
 
-    extern bool is_setup;
-
-    void setup();
-    void setup(long seed);
+    class StaticInitFunc : public InitFunc {
+        public:
+        double w_val, b_val;
+        StaticInitFunc(double weight_val, double bias_val);
+        void do_init(weight_vec& weights, bias_vec& biases);
+    };
+    
+    class RandomInitFunc : public InitFunc {
+        public:
+        std::random_device rd;
+        std::default_random_engine eng;
+        RandomInitFunc(uint_fast32_t seed);
+        void set_seed(uint_fast32_t seed);
+    };
 
     /// @brief The He weight and bias random initalitzation algorithm. Suited for networks were RELU is used.
     /// w_ij = sqrt(2.0/(number on neurons in this layer))
     /// b_i = 0
-    /// @param weights 
-    /// @param biases 
-    void he_init(weight_vec& weights, bias_vec& biases);
+    class HeInit : public RandomInitFunc {
+        public:
+        HeInit(uint_fast32_t seed);
+        void do_init(weight_vec& weights, bias_vec& biases);
+    };
     
 } // namespace InitialitzationFunctions
 
@@ -92,6 +124,13 @@ namespace ErrorFunctions {
     double fmse(std::vector<neuron_state>& res, std::vector<double>& target);
     // der = -2*(y - y')
     void dmse(std::vector<neuron_state>& res, 
+                    std::vector<double>& target, 
+                    std::vector<double>& out);
+
+    extern error_func cross_entropy;
+
+    double fcross_entropy(std::vector<neuron_state>& res, std::vector<double>& target);
+    void dcross_entropy(std::vector<neuron_state>& res, 
                     std::vector<double>& target, 
                     std::vector<double>& out);
 } // namespace ErrorFunctions
