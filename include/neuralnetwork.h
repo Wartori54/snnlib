@@ -9,10 +9,10 @@ namespace NeuralNetwork {
     class FFNeuralNetwork;
 
     /// @brief The base class that every implementation should extend.
-    /// **DO NO INSTANCIATE THIS**
+    /// **DO NO INSTANCIATE THIS** -- because you can't
     class GradientDescendOptim {
     protected:
-        FFNeuralNetwork* net_owner = nullptr;
+        std::shared_ptr<FFNeuralNetwork> net_owner = nullptr;
         // notation: L -> the cost function
         //           a -> activation function
         //           z -> the neuron result before activation function
@@ -29,10 +29,11 @@ namespace NeuralNetwork {
         ~GradientDescendOptim();
         /// @brief Must be called before using at all.
         /// @param net The network that this object is attached to.
-        virtual void set_owner(FFNeuralNetwork *net);
+        virtual void set_owner(std::shared_ptr<FFNeuralNetwork> net);
         /// @brief Proceeds to do the next iteration of the algorithm.
         /// @param targets The expected output values for the current case.
         void step(std::vector<double> &targets);
+        virtual GradientDescendOptim* make_copy() = 0;
     private:
         void gradient_descent(std::vector<double> &targets);
         virtual void shift_values(int wl) = 0;
@@ -47,8 +48,9 @@ namespace NeuralNetwork {
         /// @brief Creates an instance of BProp.
         /// @param learning_rate The learning rate for the backpropagation.
         /// @param lr_func A LearningRateOptimizerBase instance to modify the learning_rate progressively.
-        BProp(double learning_rate, OptimizerFunctions::LearningRateOptimizerBase *lr_func);
+        BProp(double learning_rate, OptimizerFunctions::LearningRateOptimizerBase& lr_func);
         ~BProp();
+        GradientDescendOptim* make_copy();
     private:
         void shift_values(int wl);
     };
@@ -76,27 +78,36 @@ namespace NeuralNetwork {
         Adam(double alpha, double beta1, double beta2, double elipson);
         ~Adam();
         // See superclass doc.
-        void set_owner(FFNeuralNetwork *net);
+        void set_owner(std::shared_ptr<FFNeuralNetwork> net);
+        GradientDescendOptim* make_copy();
     private:
         void shift_values(int wl);
     };
-    
+
+    class NNConfig {
+        public:
+        std::vector<int> n_layers;
+        int n_inputs, n_outputs;
+        std::vector<int> h_layers;
+        std::vector<act_func*> act_funcs;
+        std::shared_ptr<InitialitzationFunctions::InitFunc> v_init;
+        NNConfig(int n_inputs,
+                 int n_outputs,
+                 std::vector<int> h_layers,
+                 std::vector<act_func*> act_funcs,
+                 std::shared_ptr<InitialitzationFunctions::InitFunc> v_init); // here we can afford a copy of all vectors as they wont be too big
+    };
 
     /**
      * @brief Defines the design of a neural network.
      * 
      */
-    class NNConfig {
+    class FFNNConfig : public NNConfig {
     public:
-        std::vector<int> n_layers;
-        int n_inputs, n_outputs;
-        std::vector<int> h_layers;
-        std::vector<act_func*> act_funcs;
         error_func e_func;
-        InitialitzationFunctions::InitFunc *v_init;
         bool verbose = true;
         ///
-        /// @brief Construct a new NNConfig, used to store neural network design.
+        /// @brief Construct a new FFNNConfig, used to store neural network design.
         /// 
         /// @param n_inputs number of inputs.
         /// @param n_outputs number of outputs.
@@ -104,35 +115,44 @@ namespace NeuralNetwork {
         /// @param act_funcs activation_functions of every layer, skipping input layer, must have size of h_layers.size()+1.
         /// @param v_init the initialtization function for the weights and biases.
         ///
-        NNConfig(int n_inputs,
+        FFNNConfig(int n_inputs,
                  int n_outputs,
                  std::vector<int> h_layers,
                  std::vector<act_func*> act_funcs,
-                 InitialitzationFunctions::InitFunc *v_init,
+                 std::shared_ptr<InitialitzationFunctions::InitFunc> v_init,
                  error_func e_func); // here we can afford a copy of all vectors as they wont be too big
-        ~NNConfig();
     };
 
-    /// @brief A feed forward neural network.
-    class FFNeuralNetwork {
-    private:
+    class NeuralNet {
+    protected:
     public:
-        GradientDescendOptim *optimizer;
-        NNConfig *config;
+        std::shared_ptr<NNConfig> conf;
         weight_vec weights;
         bias_vec biases;
         weight_vec s_weights; // weight shifts
         bias_vec s_biases; // biases shifts
         activations_vec activs;
+    protected:
+        NeuralNet(NNConfig& conf);
+    };
+
+    /// @brief A feed forward neural network.
+    class FFNeuralNetwork : public NeuralNet {
+    private:
+    public:
+        std::shared_ptr<GradientDescendOptim> optimizer;
+        std::shared_ptr<FFNNConfig> config;
+        
         unsigned long long iteration;
         /// @brief Creates a feed foward neural network.
         /// @param conf The config that defines the network.
         /// @param optim The algorithm to use for bias and weight manipulation.
-        FFNeuralNetwork(NNConfig *conf, GradientDescendOptim *optim);
+        static std::shared_ptr<FFNeuralNetwork> create(FFNNConfig& conf, GradientDescendOptim& optim);
         ~FFNeuralNetwork();
+
         /// @brief Obtains the config of the network.
-        /// @return The assigned NNConfig instance.
-        NNConfig* get_config();
+        /// @return The assigned FFNNConfig instance.
+        std::shared_ptr<NeuralNetwork::FFNNConfig> get_config();
         /// @brief Does a forward pass.
         /// @param inputs The inputs to predict on.
         /// @return The results at the output layer.
@@ -144,5 +164,7 @@ namespace NeuralNetwork {
         /// @param batches The total number of interations to the whole dataset.
         /// @return The cost of the last batch
         double fit(std::vector<std::vector<double>>& inputs, std::vector<std::vector<double>>& targets, size_t batch_s, size_t batches);
+    protected:
+        FFNeuralNetwork(FFNNConfig& conf, GradientDescendOptim& optim);
     };
 }

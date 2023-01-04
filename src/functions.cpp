@@ -3,6 +3,7 @@
 #include <chrono>
 #include <stdexcept>
 #include <cmath>
+#include <profiler.h>
 
 #define vec_size std::vector::size_
 
@@ -222,4 +223,20 @@ OptimizerFunctions::LRDecay::~LRDecay() {
 
 double OptimizerFunctions::LRDecay::step(double lr, unsigned long long itr) {
     return lr/(1+this->decay*itr);
+}
+
+OptimizerFunctions::LearningRateOptimizerBase* OptimizerFunctions::LRDecay::make_copy() {
+    return new LRDecay(*this);
+}
+
+void ProfWarp::put_time(std::string name) {
+#ifdef DEBUG
+    Profiler::put_time(name);
+#endif
+}
+
+void ProfWarp::pop_time() {
+#ifdef DEBUG
+    Profiler::pop_time();
+#endif
 }

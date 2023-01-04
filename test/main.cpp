@@ -6,6 +6,7 @@
 #include <fstream>
 #include <string>
 #include <thread>
+#include <profiler.h>
 
 std::vector<std::vector<double>> train_X;
 std::vector<std::vector<double>> train_Y;
@@ -107,8 +108,8 @@ double target_func(double x, double y) {
 }
 
 void run_test(std::pair<int, double>* out, int st, int end) {
-    InitialitzationFunctions::HeInit init_f(0);
-    NeuralNetwork::NNConfig config(28*28, 10, lays, a_f, &init_f, ErrorFunctions::cross_entropy); // TODO add softmax error calc error
+    auto init_f = std::make_shared<InitialitzationFunctions::HeInit>(41);
+    NeuralNetwork::FFNNConfig config(28*28, 10, lays, a_f, init_f, ErrorFunctions::cross_entropy); // TODO add softmax error calc error
     config.verbose = false;
     // net config can be recycled
     double lowest_cost = INFINITY;
@@ -117,14 +118,14 @@ void run_test(std::pair<int, double>* out, int st, int end) {
 
     for (int i = st; i < end; i++) {
         seed = i;
-        init_f.set_seed(seed);
+        init_f->set_seed(seed);
         // OptimizerFunctions::LRDecay *dec = new OptimizerFunctions::LRDecay(0.000005);
         // NeuralNetwork::BProp *bprop = new NeuralNetwork::BProp(1e-2, dec);
         // optimizer cann not
         NeuralNetwork::Adam adam(0.002, 0.9, 0.999, 1e-8);
-        NeuralNetwork::FFNeuralNetwork net(&config, &adam);
+        std::shared_ptr<NeuralNetwork::FFNeuralNetwork> net = NeuralNetwork::FFNeuralNetwork::create(config, adam);
         
-        double cost = net.fit(mnist_train_X, mnist_train_Y, 32, 1);
+        double cost = net->fit(mnist_train_X, mnist_train_Y, 32, 1);
         std::cout << "^Seed: " << seed << std::endl;
         if (cost < lowest_cost) {
             lowest_cost = cost;
@@ -168,8 +169,10 @@ int get_good_seed(int seeds_to_test, int threadc) {
 }
 
 int main() {
+    Profiler::put_time("load_mnist");
     read_mnist_train();
     read_mnist_train_lab();
+    Profiler::pop_time();
     
     // std::vector<act_func> ptr = {ActivationFunctions::softmax};
     // jacob_act_func* jptr = dynamic_cast<jacob_act_func*>(&ptr[0]);
@@ -192,11 +195,28 @@ int main() {
     }
     // int best_seed = get_good_seed(10*5, 10);
     // InitialitzationFunctions::HeInit init_f(best_seed);
+    Profiler::put_time("create nn");
 
-    InitialitzationFunctions::HeInit init_f(41);
-    NeuralNetwork::NNConfig config(28*28, 10, lays, a_f, &init_f, ErrorFunctions::cross_entropy); // TODO add softmax error calc error
+    Profiler::put_time("he_init");
+    auto init_f = std::make_shared<InitialitzationFunctions::HeInit>(41);
+    Profiler::pop_time();
+
+    Profiler::put_time("nnconfig");
+    NeuralNetwork::FFNNConfig config(28*28, 10, lays, a_f, init_f, ErrorFunctions::cross_entropy); 
+    Profiler::pop_time();
+    
+    Profiler::put_time("adam");
     NeuralNetwork::Adam adam(0.002, 0.9, 0.999, 1e-8);
-    NeuralNetwork::FFNeuralNetwork net(&config, &adam);
-    net.fit(mnist_train_X, mnist_train_Y, 32, 100);
+    Profiler::pop_time();
 
+    Profiler::put_time("net");
+    std::shared_ptr<NeuralNetwork::FFNeuralNetwork> net = NeuralNetwork::FFNeuralNetwork::create(config, adam);
+    Profiler::pop_time();
+
+    Profiler::pop_time();
+
+    Profiler::put_time("train");
+    net->fit(mnist_train_X, mnist_train_Y, 32, 3);
+    Profiler::pop_time();
+    
 }

@@ -108,7 +108,7 @@ namespace InitialitzationFunctions {
     /// w_ij = sqrt(2.0/(number on neurons in this layer))
     /// b_i = 0
     class HeInit : public RandomInitFunc {
-        public:
+    public:
         HeInit(uint_fast32_t seed);
         void do_init(weight_vec& weights, bias_vec& biases);
     };
@@ -146,6 +146,7 @@ namespace OptimizerFunctions {
         LearningRateOptimizerBase();
         ~LearningRateOptimizerBase();
         virtual double step(double lr, unsigned long long itr) = 0;
+        virtual LearningRateOptimizerBase* make_copy() = 0;
     };
 
     /// @brief A basic time-based decay function.
@@ -157,6 +158,13 @@ namespace OptimizerFunctions {
         LRDecay(double decay);
         ~LRDecay();
         double step(double lr, unsigned long long itr);
+        LearningRateOptimizerBase* make_copy();
     };
 
 } // namespace OptimizerFunctions
+
+// simple wrappers to disable all functionality if DEBUG is not defined
+namespace ProfWarp {
+    void put_time(std::string name);
+    void pop_time();
+} // namespace ProfWarp

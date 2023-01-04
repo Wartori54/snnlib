@@ -1,0 +1,111 @@
+#pragma once
+// This file doesn't have any extension because it contains all the delcarations and definitions
+// in the same file. This is done due to templates
+#include <memory>
+#include <string>
+#include <stdexcept>
+#include <sstream>
+#include <utility>
+
+namespace Lists {
+    template <class T>
+    struct Node {
+        T data;
+        Node(T var) : data(var)  {
+        };
+        ~Node() {
+
+        };
+        std::shared_ptr<Node> previous;
+        std::shared_ptr<Node> next;
+    };
+
+    template <class T>
+    class LinkedList {
+    private:
+        std::shared_ptr<Node<T>> first_element;
+        std::shared_ptr<Node<T>> last_element;
+        std::pair<size_t, std::weak_ptr<Node<T>>> last_querry = {0, this->first_element};
+        size_t list_size = 0;
+    public:
+        LinkedList() {};
+        ~LinkedList() {};
+        size_t size() {
+            return this->list_size;
+        };
+        T& first() {
+            return first_element.get()->data;
+        };
+        T& last() {
+            return last_element.get()->data;
+        };
+        void add_element(T elem) {
+            // create pointer
+            std::shared_ptr<Node<T>> new_elem;
+            new_elem = std::make_shared<Node<T>>(elem);
+            // if its first element set up first and last pointers
+            if (!first_element && !last_element) {
+                first_element = new_elem;
+                last_element = new_elem;
+                list_size = 1;
+                // because it is the first one, theres nothing to do
+                return;
+            }
+            
+            // set up next and previous
+            this->last_element.get()->next = new_elem;
+            new_elem.get()->previous = this->last_element;
+            // overwrite the last element pointer
+            this->last_element = new_elem;
+            list_size++;
+        };
+        T& operator[](size_t offset) {
+            if (offset >= this->list_size) {
+                std::stringstream strstream;
+                strstream << "invalid offset: " << offset << ", size: " << this->list_size;
+                throw std::runtime_error(strstream.str()); 
+            }
+            if (!last_querry.second.expired()) {
+                std::shared_ptr<Node<T>> temp;
+                switch (((signed) offset)-((signed) last_querry.first)) {
+                case 1:
+                    last_querry.first += 1;
+                    temp = last_querry.second.lock();
+                    last_querry.second = temp->next;
+                    return temp->next.get()->data;
+                    break;
+                case 0:
+                    return last_querry.second.lock().get()->data;
+                    break;
+                case -1:
+                    last_querry.first -= 1;
+                    temp = last_querry.second.lock();
+                    last_querry.second = temp->previous;
+                    return temp->previous.get()->data;
+                    break;
+                default:
+                    break;
+                }
+            }
+            if (offset > list_size/2) {
+                // start from the end
+                std::shared_ptr<Node<T>> curr_node(this->last_element);
+                for (size_t i = this->list_size-1; i > offset; i--) {
+                    curr_node = curr_node.get()->previous;
+                }
+                last_querry.first = offset;
+                last_querry.second = curr_node;
+                return curr_node.get()->data;
+            } else {
+                // start from the beginning
+                std::shared_ptr<Node<T>> curr_node(this->first_element);
+                for (size_t i = 0; i < offset; i++) {
+                    curr_node = curr_node.get()->next;
+                }
+                last_querry.first = offset;
+                last_querry.second = curr_node;
+                return curr_node.get()->data;
+            }
+        };
+    };
+}

@@ -8,6 +8,8 @@ test/*
 # Unignore all with extensions
 !test/*.*
 
+profiler_data/
+
 
 # Prerequisites
 *.d

@@ -9,12 +9,11 @@
 #include <neuralnetwork.h>
 #include <functions.h>
 
-NeuralNetwork::NNConfig::NNConfig(int n_inputs, 
-                 int n_outputs, 
-                 std::vector<int> h_layers, 
-                 std::vector<act_func*> act_funcs, 
-                 InitialitzationFunctions::InitFunc *v_init,
-                 error_func e_func) {
+
+NeuralNetwork::NNConfig::NNConfig(int n_inputs, int n_outputs,
+                                  std::vector<int> h_layers,
+                                  std::vector<act_func*> act_funcs,
+                                  std::shared_ptr<InitialitzationFunctions::InitFunc> v_init) {
     if (h_layers.size()+1 != act_funcs.size()) 
         throw std::length_error("h_layers and act_funcs size mismatch, sizes: " + std::to_string(h_layers.size()) + ", " + std::to_string(act_funcs.size()));
     this->n_inputs = n_inputs;
@@ -22,7 +21,6 @@ NeuralNetwork::NNConfig::NNConfig(int n_inputs,
     this->h_layers = h_layers;
     this->act_funcs = act_funcs;
     this->v_init = v_init;
-    this->e_func = e_func;
     this->n_layers = std::vector(h_layers.size()+2, 0);
     this->n_layers[0] = n_inputs;
     this->n_layers[n_layers.size()-1] = n_outputs;
@@ -31,42 +29,57 @@ NeuralNetwork::NNConfig::NNConfig(int n_inputs,
     }
 }
 
-NeuralNetwork::NNConfig::~NNConfig() {
+NeuralNetwork::FFNNConfig::FFNNConfig(int n_inputs, 
+                 int n_outputs, 
+                 std::vector<int> h_layers, 
+                 std::vector<act_func*> act_funcs, 
+                 std::shared_ptr<InitialitzationFunctions::InitFunc> v_init,
+                 error_func e_func) : NNConfig(n_inputs, n_outputs, h_layers, act_funcs, v_init) {
+    this->e_func = e_func;   
 }
 
-NeuralNetwork::FFNeuralNetwork::FFNeuralNetwork(NNConfig *conf, GradientDescendOptim *optim) {
-    this->config = conf;
-    this->optimizer = optim;
-    this->iteration = 0;
+NeuralNetwork::NeuralNet::NeuralNet(NNConfig& conf) {
+    this->conf = std::shared_ptr<NNConfig>(new NNConfig(conf));
     // setup arrays
-    weights.resize(conf->n_layers.size()-1);
-    biases.resize(conf->n_layers.size()); // biases[0] will be unused
-    activs.resize(conf->n_layers.size());
-    for (size_t i = 0; i < conf->n_layers.size()-1; i++) {
-        weights[i].resize(conf->n_layers[i]);
-        for (int j = 0; j < conf->n_layers[i]; j++) {
-            weights[i][j] = std::vector<double>(conf->n_layers[i+1], 0);
+    weights.resize(conf.n_layers.size()-1);
+    biases.resize(conf.n_layers.size()); // biases[0] will be unused
+    activs.resize(conf.n_layers.size());
+    for (size_t i = 0; i < conf.n_layers.size()-1; i++) {
+        weights[i].resize(conf.n_layers[i]);
+        for (int j = 0; j < conf.n_layers[i]; j++) {
+            weights[i][j] = std::vector<double>(conf.n_layers[i+1], 0);
         }
 
     }
-    activs[0] = std::vector<neuron_state>(conf->n_inputs, {0, 0});
-    for (size_t i = 1; i < conf->n_layers.size(); i++) {
-        biases[i] = std::vector<double>(conf->n_layers[i], 0);
-        activs[i] = std::vector<neuron_state>(conf->n_layers[i], {0, 0});
+    activs[0] = std::vector<neuron_state>(conf.n_inputs, {0, 0});
+    for (size_t i = 1; i < conf.n_layers.size(); i++) {
+        biases[i] = std::vector<double>(conf.n_layers[i], 0);
+        activs[i] = std::vector<neuron_state>(conf.n_layers[i], {0, 0});
     }
 
     // init network
-    conf->v_init->do_init(weights, biases);
+    conf.v_init->do_init(weights, biases);
     // create temp weights and biases
     s_biases = biases;
     s_weights = weights;
-    this->optimizer->set_owner(this);
+}
+
+std::shared_ptr<NeuralNetwork::FFNeuralNetwork> NeuralNetwork::FFNeuralNetwork::create(FFNNConfig& conf, GradientDescendOptim& optim) {
+    auto temp = std::shared_ptr<FFNeuralNetwork>(new FFNeuralNetwork(conf, optim));
+    temp->optimizer->set_owner(temp);
+    return temp;
+}
+
+NeuralNetwork::FFNeuralNetwork::FFNeuralNetwork(FFNNConfig& conf, GradientDescendOptim& optim) : NeuralNetwork::NeuralNet(conf) {
+    this->optimizer = std::shared_ptr<GradientDescendOptim>(optim.make_copy());
+    this->iteration = 0;
+    this->config = std::shared_ptr<FFNNConfig>(new FFNNConfig(conf));
 }
 
 NeuralNetwork::FFNeuralNetwork::~FFNeuralNetwork() {
 }
 
-NeuralNetwork::NNConfig *NeuralNetwork::FFNeuralNetwork::get_config() {
+std::shared_ptr<NeuralNetwork::FFNNConfig> NeuralNetwork::FFNeuralNetwork::get_config() {
     return this->config;
 }
 
@@ -157,12 +170,12 @@ double NeuralNetwork::FFNeuralNetwork::fit(std::vector<std::vector<double>>& inp
 NeuralNetwork::GradientDescendOptim::~GradientDescendOptim() {
 }
 
-void NeuralNetwork::GradientDescendOptim::set_owner(FFNeuralNetwork *net) {
+void NeuralNetwork::GradientDescendOptim::set_owner(std::shared_ptr<FFNeuralNetwork> net) {
     if (this->net_owner != nullptr) {
         throw std::runtime_error("set_owner called twice");
     }
     this->net_owner = net;
-    NNConfig* curr_config = net->get_config();
+    std::shared_ptr<FFNNConfig> curr_config = net->get_config();
     int biggest_layer = 0;
     for (size_t i = 0; i < curr_config->n_layers.size() - 1; i++) {
         if (biggest_layer < curr_config->n_layers[i]) {
@@ -188,7 +201,7 @@ void NeuralNetwork::GradientDescendOptim::step(std::vector<double> &targets) {
 }
 
 void NeuralNetwork::GradientDescendOptim::gradient_descent(std::vector<double> &targets) {
-    NNConfig* curr_conf = net_owner->get_config();
+    std::shared_ptr<FFNNConfig> curr_conf = net_owner->get_config();
     size_t ll_index = net_owner->activs.size()-1;
     if (targets.size() != net_owner->activs[ll_index].size()) 
         throw std::runtime_error("gradient_descent: targets.size() != activs.size()");
@@ -237,9 +250,9 @@ void NeuralNetwork::GradientDescendOptim::gradient_descent(std::vector<double> &
     }
 }
 
-NeuralNetwork::BProp::BProp(double learning_rate, OptimizerFunctions::LearningRateOptimizerBase *lr_func) {
+NeuralNetwork::BProp::BProp(double learning_rate, OptimizerFunctions::LearningRateOptimizerBase& lr_func) {
     this->learning_rate = learning_rate;
-    this->lr_func = std::unique_ptr<OptimizerFunctions::LearningRateOptimizerBase>(lr_func);
+    this->lr_func = std::unique_ptr<OptimizerFunctions::LearningRateOptimizerBase>(lr_func.make_copy());
 }
 
 NeuralNetwork::BProp::~BProp() {
@@ -249,7 +262,7 @@ void NeuralNetwork::BProp::shift_values(int wl) {
     if (!this->net_owner) {
         throw std::runtime_error("set_owner was not called");
     }
-    NNConfig *curr_conf = net_owner->get_config();
+    std::shared_ptr<FFNNConfig> curr_conf = net_owner->get_config();
     for (int n_i = 0; n_i < curr_conf->n_layers[wl]; n_i++) {
         net_owner->s_biases[wl][n_i] -= this->learning_rate*this->dLofb[n_i];
         for (int prev_n_i = 0; prev_n_i < curr_conf->n_layers[wl-1]; prev_n_i++) {
@@ -257,6 +270,11 @@ void NeuralNetwork::BProp::shift_values(int wl) {
         }
     }
     this->learning_rate = this->lr_func.get()->step(this->learning_rate, net_owner->iteration);
+}
+
+NeuralNetwork::GradientDescendOptim* NeuralNetwork::BProp::make_copy() {
+    NeuralNetwork::BProp* copy = new NeuralNetwork::BProp(this->learning_rate, *this->lr_func.get());
+    return copy;
 }
 
 NeuralNetwork::Adam::Adam(double alpha, double beta1, double beta2, double elipson) {
@@ -271,7 +289,7 @@ NeuralNetwork::Adam::Adam(double alpha, double beta1, double beta2, double elips
 NeuralNetwork::Adam::~Adam() {
 }
 
-void NeuralNetwork::Adam::set_owner(FFNeuralNetwork *net) {
+void NeuralNetwork::Adam::set_owner(std::shared_ptr<FFNeuralNetwork> net) {
     GradientDescendOptim::set_owner(net);
     this->last_itr = 1;
     this->m_w = net->weights; // copy from weights
@@ -299,7 +317,7 @@ void NeuralNetwork::Adam::shift_values(int wl) {
     if (!this->net_owner) {
         throw std::runtime_error("set_owner was not called");
     }
-    NNConfig *curr_conf = net_owner->get_config();
+    std::shared_ptr<FFNNConfig> curr_conf = net_owner->get_config();
     double mhat_b = 0;
     double vhat_b = 0;
     double mhat_w = 0;
@@ -323,4 +341,9 @@ void NeuralNetwork::Adam::shift_values(int wl) {
             net_owner->s_weights[wl-1][prev_n_i][n_i] = net_owner->s_weights[wl-1][prev_n_i][n_i] - alpha * mhat_w / (std::sqrt(vhat_w) + elipson);
         }
     }
+}
+
+NeuralNetwork::GradientDescendOptim* NeuralNetwork::Adam::make_copy() {
+    NeuralNetwork::Adam* copy = new NeuralNetwork::Adam(this->alpha, this->beta1, this->beta2, this->elipson);
+    return copy;
 }
